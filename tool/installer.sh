@@ -115,7 +115,6 @@ V8_LEGACY_OUT="/usr/share/polkit-1/actions/mko.cpupower.setcpufreq.policy"
 
 if [ "${ACTION}" = "check" ]
 then
-    exit "${EXIT_NEEDS_SECURITY_UPDATE}"
     # pre v9 policy rules have security issues
     # cpufreqctl should always be located in /usr/local/bin or /usr/bin as of
     # https://github.com/deinstapel/cpupower/issues/102
