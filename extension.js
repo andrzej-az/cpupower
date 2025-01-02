@@ -55,6 +55,7 @@ export default class CPUPowerExtension extends Extension {
 
     /* exported enable */
     enable() {
+        globalThis.cpupowerExtension = this;
         const interfaceBinary = GLib.file_get_contents(`${EXTENSIONDIR}/schemas/io.github.martin31821.cpupower.dbus.xml`)[1];
         let decoder = new TextDecoder('utf-8');
         let interfaceXml = decoder.decode(interfaceBinary);
@@ -126,5 +127,6 @@ export default class CPUPowerExtension extends Extension {
             this.cpupowerProxy = null;
             this.extensionReloadSignalHandler = null;
         }
+        delete globalThis.cpupowerExtension;
     }
 }

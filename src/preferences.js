@@ -39,7 +39,7 @@ import * as utils from './utils.js';
 import {CPUFreqProfile} from './profile.js';
 
 const EXTENSIONDIR = import.meta.url.substr('file://'.length, import.meta.url.lastIndexOf('/') - 'file://'.length);
-const GLADE_FILE = `${EXTENSIONDIR}/data/cpupower-preferences.glade`;
+const GLADE_FILE = `${EXTENSIONDIR}/../data/cpupower-preferences.glade`;
 const SETTINGS_SCHEMA = "org.gnome.shell.extensions.cpupower";
 
 /* exported CPUPowerPreferences */
@@ -58,14 +58,40 @@ export class CPUPowerPreferencesContent {
 
         this.Builder = new Gtk.Builder();
         this.Builder.set_translation_domain("gnome-shell-extension-cpupower");
+        // see https://discourse.gnome.org/t/gtk-4-how-to-replace-gtk-builder-connect-signals/3561/2
         this.Builder.add_objects_from_file(
             GLADE_FILE,
-            ["MainWidget", "AboutButton", "FrequencyScalingDriverListStore"],
+            ["MainWidgetContainer", "AboutButton", "FrequencyScalingDriverListStore"],
         );
-        this.Builder.connect_signals_full((builder, object, signal, handler) => {
-            object.connect(signal, this[handler].bind(this));
-        });
+        const mainWidget = this.Builder.get_object("MainWidgetContainer");
+        mainWidget.connect('realize',this.onMainWidgetRealize.bind(this));
+        //mainWidget.connect('switch-page',this.onMainWidgetSwitchPage);
+
+        this.Builder.get_object('AboutButton').connect('clicked', this.onAboutButtonClicked.bind(this));
+
+        this.Builder.get_object('ShowCurrentFrequencySwitch').connect('notify::active', this.onShowCurrentFrequencySwitchActiveNotify.bind(this));
+        this.Builder.get_object('UseGHzInsteadOfMHzSwitch').connect('notify::active', this.onUseGHzInsteadOfMHzSwitchActiveNotify.bind(this));
+        this.Builder.get_object('ShowFrequencyAsComboBox').connect('notify::active', this.onShowFrequencyAsComboBoxActiveNotify.bind(this));
+        this.Builder.get_object('ShowArrowSwitch').connect('notify::active', this.onShowArrowSwitchActiveNotify.bind(this));
+        this.Builder.get_object('ShowIconSwitch').connect('notify::active', this.onShowIconSwitchActiveNotify.bind(this));
+        this.Builder.get_object('FrequencyScalingDriverComboBox').connect('notify::active', this.onFrequencyScalingDriverComboBoxActiveNotify.bind(this));
+        this.Builder.get_object('DefaultACComboBox').connect('notify::active', this.onDefaultACComboBoxActiveNotify.bind(this));
+        this.Builder.get_object('DefaultBatComboBox').connect('notify::active', this.onDefaultBatComboBoxActiveNotify.bind(this));
+
+        this.Builder.get_object('ProfilesListBox').connect('row-selected', this.onProfilesListBoxRowSelected.bind(this));
+        this.Builder.get_object('ProfilesAddToolButton').connect('clicked', this.onProfilesAddToolButtonClicked.bind(this));
+        this.Builder.get_object('ProfilesRemoveToolButton').connect('clicked', this.onProfilesRemoveToolButtonClicked.bind(this));
+        this.Builder.get_object('ProfilesMoveUpToolButton').connect('clicked', this.onProfilesMoveUpToolButtonClicked.bind(this));
+        this.Builder.get_object('ProfilesMoveDownToolButton').connect('clicked', this.onProfilesMoveDownToolButtonClicked.bind(this));
+        this.Builder.get_object('UninstallButton').connect('clicked', this.onUninstallButtonClicked.bind(this));
+        //this.Builder.get_object('ProfileNameEntry').connect('changed', this.onProfileNameEntryChanged);
+        // this.Builder.get_object('ProfileTurboBoostSwitch').connect('notify::active', this.onProfileTurboBoostSwitchActiveNotify);
+        // this.Builder.get_object('ProfileDiscardButton').connect('clicked', this.onProfileDiscardButtonClicked);
+        // this.Builder.get_object('ProfileSaveButton').connect('clicked', this.onProfileSaveButtonClicked);
+        // this.Builder.get_object('ProfileMinimumFrequencyScale').connect('value-changed', this.onProfileMinimumFrequencyScaleValueChanged);
+        // this.Builder.get_object('ProfileMaximumFrequencyScale').connect('value-changed', this.onProfileMaximumFrequencyScaleValueChanged);
         this.loadWidgets(
+            "MainWidgetContainer",
             "MainWidget",
             "AboutButton",
             "ShowIconSwitch",
@@ -93,9 +119,10 @@ export class CPUPowerPreferencesContent {
 
     onBusAcquired(connection, _name) {
         log("DBus bus acquired!");
-        const interfaceBinary = GLib.file_get_contents(`${EXTENSIONDIR}/schemas/io.github.martin31821.cpupower.dbus.xml`)[1];
+        const interfaceBinary = GLib.file_get_contents(`${EXTENSIONDIR}/../schemas/io.github.martin31821.cpupower.dbus.xml`)[1];
         let interfaceXml;
         if (parseFloat(Config.PACKAGE_VERSION.substring(0, 4)) > 3.28) {
+            const ByteArray = imports.byteArray;
             interfaceXml = ByteArray.toString(interfaceBinary);
         } else {
             interfaceXml = interfaceBinary.toString();
@@ -255,8 +282,9 @@ export class CPUPowerPreferencesContent {
 
     syncOrdering() {
         for (let profileContext of this.ProfilesMap.values()) {
-            let index = profileContext.ListItem.Row.get_index();
-            this.ProfileStack.child_set_property(profileContext.Settings.StackItem, "position", index);
+            //TODO(az): implement without obsolete child_set_property
+            //let index = profileContext.ListItem.Row.get_index();
+            //this.ProfileStack.child_set_property(profileContext.Settings.StackItem, "position", index);
         }
     }
 
@@ -271,18 +299,7 @@ export class CPUPowerPreferencesContent {
     }
 
     show() {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 0, () => {
-            let window = this.MainWidget.get_toplevel();
-            let headerbar = window.get_titlebar();
-
-            headerbar.title = _("CPU Power Manager");
-            headerbar.subtitle = _("Preferences");
-            headerbar.pack_start(this.AboutButton);
-
-            return GLib.SOURCE_REMOVE;
-        });
-
-        return this.MainWidget;
+        return this.MainWidgetContainer;
     }
 
     addOrUpdateProfile(profile) {
@@ -396,13 +413,12 @@ export class CPUPowerPreferencesContent {
                 "ProfileListBoxRow",
             );
 
-            profileSettingsBuilder.connect_signals_full((builder, object, signal, handler) => {
-                object.connect(signal, this[handler].bind(this, profileContext));
-            });
-
-            profileListItemBuilder.connect_signals_full((builder, object, signal, handler) => {
-                object.connect(signal, this[handler].bind(this, profileContext));
-            });
+            profileSettingsBuilder.get_object('ProfileNameEntry').connect('changed', this.onProfileNameEntryChanged.bind(this));
+            profileSettingsBuilder.get_object('ProfileTurboBoostSwitch').connect('notify::active', this.onProfileTurboBoostSwitchActiveNotify.bind(this));
+            profileSettingsBuilder.get_object('ProfileDiscardButton').connect('clicked', this.onProfileDiscardButtonClicked.bind(this));
+            profileSettingsBuilder.get_object('ProfileSaveButton').connect('clicked', this.onProfileSaveButtonClicked.bind(this));
+            profileSettingsBuilder.get_object('ProfileMinimumFrequencyScale').connect('value-changed', this.onProfileMinimumFrequencyScaleValueChanged.bind(this));
+            profileSettingsBuilder.get_object('ProfileMaximumFrequencyScale').connect('value-changed', this.onProfileMaximumFrequencyScaleValueChanged.bind(this));
 
             this.ProfilesListBox.prepend(profileContext.ListItem.Row);
             this.ProfileStack.add_named(profileContext.Settings.StackItem, profileContext.Profile.UUID.toString(16));
@@ -503,6 +519,11 @@ export class CPUPowerPreferencesContent {
             }
         }
         return profileContext;
+    }
+
+    getVisibleProfileContext() {
+        const uuid = this.ProfileStack.get_visible_child_name();
+        return this.ProfilesMap.get(uuid);
     }
 
     onMainWidgetSwitchPage(mainWidget) {
@@ -738,7 +759,8 @@ export class CPUPowerPreferencesContent {
         }
     }
 
-    onProfileNameEntryChanged(profileContext, entry) {
+    onProfileNameEntryChanged(entry) {
+        let profileContext = this.getVisibleProfileContext();
         let changed = profileContext.Profile.Name !== entry.get_text();
 
         if (changed) {
@@ -753,7 +775,8 @@ export class CPUPowerPreferencesContent {
         }
     }
 
-    onProfileMinimumFrequencyScaleValueChanged(profileContext, scale) {
+    onProfileMinimumFrequencyScaleValueChanged(scale) {
+        let profileContext = this.getVisibleProfileContext();
         let changed = profileContext.Profile.MinimumFrequency !== scale.get_value();
 
         if (changed) {
@@ -772,7 +795,8 @@ export class CPUPowerPreferencesContent {
         }
     }
 
-    onProfileMaximumFrequencyScaleValueChanged(profileContext, scale) {
+    onProfileMaximumFrequencyScaleValueChanged(scale) {
+        let profileContext = this.getVisibleProfileContext();
         let changed = profileContext.Profile.MaximumFrequency !== scale.get_value();
 
         if (changed) {
@@ -791,7 +815,8 @@ export class CPUPowerPreferencesContent {
         }
     }
 
-    onProfileTurboBoostSwitchActiveNotify(profileContext, switchButton) {
+    onProfileTurboBoostSwitchActiveNotify(switchButton) {
+        let profileContext = this.getVisibleProfileContext();
         let changed = profileContext.Profile.TurboBoost !== switchButton.get_active();
 
         if (changed) {
@@ -806,11 +831,13 @@ export class CPUPowerPreferencesContent {
         }
     }
 
-    onProfileDiscardButtonClicked(profileContext, _button) {
+    onProfileDiscardButtonClicked(_button) {
+        let profileContext = this.getVisibleProfileContext();
         this.addOrUpdateProfile(profileContext.Profile);
     }
 
-    onProfileSaveButtonClicked(profileContext, _button) {
+    onProfileSaveButtonClicked(_button) {
+        let profileContext = this.getVisibleProfileContext();
         let name = profileContext.Settings.NameEntry.get_text();
         let minimumFrequency = profileContext.Settings.MinimumFrequencyScale.get_value();
         let maximumFrequency = profileContext.Settings.MaximumFrequencyScale.get_value();

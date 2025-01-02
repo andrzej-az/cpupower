@@ -641,7 +641,7 @@ export class CPUFreqIndicator extends baseindicator.CPUFreqBaseIndicator {
     }
 
     onPreferencesActivate(_item) {
-        const extension = Extension.lookupByURL(import.meta.url);
+        const extension = Extension.lookupByUUID('cpupower@mko-sl.de');
         extension.openPreferences();
     }
 }

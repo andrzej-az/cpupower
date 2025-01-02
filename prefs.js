@@ -26,22 +26,21 @@
  *
  */
 
-import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import {ExtensionPreferences,  gettext as _} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {CPUPowerPreferencesContent} from './src/preferences.js';
 import Gtk from 'gi://Gtk';
+import Adw from "gi://Adw"
 
 export default class CPUPowerPreferences extends ExtensionPreferences {
     fillPreferencesWindow(win) {
         win._settings = this.getSettings();
-        win.connect("delete-event", () => {
-            Gtk.main_quit();
-        });
-        let headerbar = new Gtk.HeaderBar();
-        headerbar.set_show_close_button(true);
-        headerbar.title = "CPU Power Manager";
+
+        if (globalThis.cpupowerExtension == undefined){
+            globalThis.cpupowerExtension = ExtensionPreferences.lookupByUUID('cpupower@mko-sl.de')
+        }
         let preferences = new CPUPowerPreferencesContent();
         let mainWidget = preferences.show();
-        win.set_titlebar(headerbar);
+
         win.add(mainWidget);
     }
 }

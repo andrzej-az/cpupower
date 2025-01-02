@@ -25,8 +25,6 @@
  */
 
 import Gio from 'gi://Gio';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
-import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 
 /* exported getSettings */
 /**
@@ -38,7 +36,7 @@ import * as Config from 'resource:///org/gnome/shell/misc/config.js';
  * metadata["settings-schema"].
  */
 export function getSettings(schema) {
-    let extension = Extension.lookupByUUID('cpupower@mko-sl.de');
+    let extension = globalThis.cpupowerExtension;
 
     schema = schema || extension.metadata["settings-schema"];
 
